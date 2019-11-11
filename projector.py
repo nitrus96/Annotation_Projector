@@ -32,16 +32,31 @@ def project_annotations(path_to_src, path_to_tgt, alignment_file):
             assert re.match(r'[0-9]*-[0-9]', al) is not None
             src_tok, tgt_tok = [int(i) for i in al.split('-')]
             # append the alignment dictionaries
-            src_to_tgt_dict[src_tok].append(tgt_tok)
-            tgt_to_src_dict[tgt_tok].append(src_tok)
+            src_to_tgt_dict[src_tok+1].append(tgt_tok+1)
+            tgt_to_src_dict[tgt_tok+1].append(src_tok+1)
+            # iterate through each source sentence
+            for tok in src_sent:
+                s_i = tok.id
+                # check if token id is the source dictionary
+                try:
+                    t_x = src_to_tgt_dict[s_i]
+                except:
+                    pass
 
-
-        # iterate through each source sentence
-        for tok in range(0, len(tgt_sent)):
-            # one-to-one alignment
-            s_i = tok.id
-            
-            # unaligned source
-        
+                if len(t_x) == 1:
+                    if t_x[0] == 1:
+                        # one to one
+                        pass
+                    else:
+                        # one to many
+                        pass
+                else:
+                    for pos in t_x:
+                        if len(pos) > 1:
+                            # many to many
+                            break
+                        # many to one
+                        pass    
+                            
 src, tgt = project_annotations('./treebanks/new_uk_treebank.conllu', './treebanks/tokenized_be.conllu')
 
