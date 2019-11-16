@@ -100,7 +100,6 @@ def one_to_many():
 
 def save_to_file(filename, sent):
     with codecs.open(filename, 'a', "utf-8") as f:
-        #sent = '\n'.join([i for i in sent.conll().split('\n') if '\t_\t_\t_\t_\t_\t_\t_\t_' not in i])
         sent_by_line = sent.conll().split('\n')
         # go through each word
         for word in sent_by_line:
