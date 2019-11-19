@@ -2,6 +2,8 @@ import re
 import pyconll
 import collections
 import codecs
+from functools import wraps
+from copy import copy
 
 def project_annotations(path_to_src, path_to_tgt, alignment_file):
     # load from treebanks
@@ -12,6 +14,7 @@ def project_annotations(path_to_src, path_to_tgt, alignment_file):
     algs = alg_generator(alignment_file)
     # iterate through treebank
     for sent in range(len(src)):
+        save = True
         src_sent = src[sent]
         print(src_sent.id)
         tgt_sent = tgt[sent]
@@ -26,6 +29,9 @@ def project_annotations(path_to_src, path_to_tgt, alignment_file):
             # append the alignment dictionaries
             src_to_tgt_dict[src_tok].append(tgt_tok)
             tgt_to_src_dict[tgt_tok].append(src_tok)
+        if max(src_to_tgt_dict.keys()) > len(src_sent) or max(tgt_to_src_dict.keys()) > len(tgt_sent):
+            print('Alignment in sentence {} is incorrect'.format(sent+1))
+            continue
         # iterate through the source sentence
         for s_i in src_sent:
             s_i_id = int(s_i.id)
@@ -36,7 +42,7 @@ def project_annotations(path_to_src, path_to_tgt, alignment_file):
                     t_x_id = t_x[0]
                     if len(tgt_to_src_dict[t_x_id]) == 1:
                         # one to one
-                        one_to_one(s_i, tgt_sent[t_x_id - 1], src_to_tgt_dict)
+                        one_to_one(s_i, tgt_sent[t_x_id - 1], src_to_tgt_dict, src_sent, tgt_sent)
                     else:
                         # many to one
                         continue
@@ -48,7 +54,7 @@ def project_annotations(path_to_src, path_to_tgt, alignment_file):
                             continue
                     # one to many
                     print('one to many')
-                    one_to_one(s_i, tgt_sent[t_x[0]-1], src_to_tgt_dict) 
+                    one_to_one(s_i, tgt_sent[t_x[0]-1], src_to_tgt_dict, src_sent, tgt_sent) 
             # if not in the source dictionary, the word is unaligned 
             else:
                 # check the word for any outgoing relations
@@ -56,15 +62,34 @@ def project_annotations(path_to_src, path_to_tgt, alignment_file):
                     print('There is an unaligned word but we can ignore it in sentence {}'.format(sent+1))
                     continue
                 else:
-                    print('There exists an unaligned word with an outgoing relation in sentence {}'.format(sent+1))
-                    continue
-        save_to_file('trial.conllu', tgt_sent)
-
+                    print('There exists an unaligned word with an outgoing relation in sentence {}, word id {}'.format(sent+1, s_i.id))
+                    print('Not implemented')
+                    save = False
+                    break
+        if save == True:
+            save_to_file('trial.conllu', tgt_sent)
         
 
     ## NB we can just save the modified treebank once everything is projected ##
 
 ### SUPPORT FUNCTIONS ###
+
+def add_dummy(s_j, src_dict, tgt_sent_len):
+    dummy = copy(s_j)
+    dummy.id = str(tgt_sent_len+1)
+    dummy._form = 'DUMMY'
+    dummy._lemma = 'DUMMY'
+    dummy.deprel = s_j.deprel
+    dummy.upos = s_j.upos
+    src_dict[int(s_j.id)].append(int(dummy.id))
+    if s_j.head != str(0):
+        try:
+            dummy.head = str(src_dict[int(s_j.id)][0])
+        except IndexError:
+            raise Exception('You done fucked up, son, again')
+    else:
+        dummy.head = str(0)
+    return dummy    
 
 def swap_tgt_src(alg_file, output_file):
     with open(alg_file, 'r') as alg:
@@ -80,7 +105,7 @@ def alg_generator(alignment_file):
         for line in alg:
             yield line.rstrip('\n')
 
-def one_to_one(s_i, t_x, src_dict):
+def one_to_one(s_i, t_x, src_dict, src_sent, tgt_sent):
     # project upos tags 
     t_x.upos = s_i.upos
     # project dependencies
@@ -90,8 +115,11 @@ def one_to_one(s_i, t_x, src_dict):
     if s_j != str(0):
         try:
             t_x.head = str(src_dict[int(s_j)][0])
+        # add dummy node
         except IndexError:
-            raise SystemExit('You done fucked up, son')
+            dummy = add_dummy(src_sent[s_j], src_dict, len(tgt_sent))
+            tgt_sent._tokens.append(dummy)
+            t_x.head = dummy.id
     else:
         t_x.head = str(0)
 
@@ -106,6 +134,7 @@ def save_to_file(filename, sent):
             # split word at tab
             tab_list = word.split("\t")
             # check that the word has no features/dependencies
+            print(tab_list)
             if tab_list.count('_') >= 6:
                 # list index
                 index = sent_by_line.index(word)
@@ -113,6 +142,7 @@ def save_to_file(filename, sent):
                 word_index = tab_list[0]
                 renum_list = [i.split('\t') for i in sent_by_line[index+1:]]
                 for line in renum_list:
+                    print(line, 'line')
                     line[0] = str(int(line[0])-1)
                     if int(line[6]) > int(word_index):
                         line[6] = str(int(line[6])-1)
@@ -124,5 +154,6 @@ def save_to_file(filename, sent):
 
 sent = project_annotations('./treebanks/new_uk_treebank.conllu', './treebanks/tokenized_be.conllu', './raw_data/uk_to_be.txt')
 #sent = project_annotations('./test_sent/uk.conllu', './test_sent/be.conllu', './test_sent/alg.txt')
+
 
 
