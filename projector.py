@@ -1,3 +1,5 @@
+# WORK ON SENTENCE 1485
+
 import re
 import pyconll
 import collections
@@ -32,9 +34,14 @@ def project_annotations(path_to_src, path_to_tgt, alignment_file):
         if max(src_to_tgt_dict.keys()) > len(src_sent) or max(tgt_to_src_dict.keys()) > len(tgt_sent):
             print('Alignment in sentence {} is incorrect'.format(sent+1))
             continue
+
+
         # iterate through the source sentence
         for s_i in src_sent:
-            s_i_id = int(s_i.id)
+            if '-' not in s_i.id:
+                s_i_id = int(s_i.id)
+            else:
+                continue
             # check that token id is in the source dictionary (whether source -> target alignment exists)
             if s_i_id in src_to_tgt_dict.keys():
                 t_x = src_to_tgt_dict[s_i_id]
@@ -45,16 +52,20 @@ def project_annotations(path_to_src, path_to_tgt, alignment_file):
                         one_to_one(s_i, tgt_sent[t_x_id - 1], src_to_tgt_dict, src_sent, tgt_sent)
                     else:
                         # many to one
-                        continue
+                        save = False
+                        break
+
                 else:
                     for pos in t_x:
                         if len(tgt_to_src_dict[pos]) > 1:
                             # many to many
                             print('many to many')
-                            continue
-                    # one to many
-                    print('one to many')
-                    one_to_one(s_i, tgt_sent[t_x[0]-1], src_to_tgt_dict, src_sent, tgt_sent) 
+                            save = False
+                            break
+                    # one to many 
+
+                    one_to_many(s_i, t_x, src_to_tgt_dict, src_sent, tgt_sent)
+                    #save = False
             # if not in the source dictionary, the word is unaligned 
             else:
                 # check the word for any outgoing relations
@@ -70,26 +81,7 @@ def project_annotations(path_to_src, path_to_tgt, alignment_file):
             save_to_file('trial.conllu', tgt_sent)
         
 
-    ## NB we can just save the modified treebank once everything is projected ##
-
 ### SUPPORT FUNCTIONS ###
-
-def add_dummy(s_j, src_dict, tgt_sent_len):
-    dummy = copy(s_j)
-    dummy.id = str(tgt_sent_len+1)
-    dummy._form = 'DUMMY'
-    dummy._lemma = 'DUMMY'
-    dummy.deprel = s_j.deprel
-    dummy.upos = s_j.upos
-    src_dict[int(s_j.id)].append(int(dummy.id))
-    if s_j.head != str(0):
-        try:
-            dummy.head = str(src_dict[int(s_j.id)][0])
-        except IndexError:
-            raise Exception('You done fucked up, son, again')
-    else:
-        dummy.head = str(0)
-    return dummy    
 
 def swap_tgt_src(alg_file, output_file):
     with open(alg_file, 'r') as alg:
@@ -112,9 +104,12 @@ def one_to_one(s_i, t_x, src_dict, src_sent, tgt_sent):
     t_x.deprel = s_i.deprel
     # project heads
     s_j = s_i.head
+    # If token's head is not the root
+
     if s_j != str(0):
         try:
             t_x.head = str(src_dict[int(s_j)][0])
+        # unaligned source head found
         # add dummy node
         except IndexError:
             dummy = add_dummy(src_sent[s_j], src_dict, len(tgt_sent))
@@ -123,37 +118,84 @@ def one_to_one(s_i, t_x, src_dict, src_sent, tgt_sent):
     else:
         t_x.head = str(0)
 
-def one_to_many():
-    pass
+def one_to_many(s_i, t_x, src_dict, src_sent, tgt_sent):
+    dummy_pos = t_x[0]
+    tgt_sent[dummy_pos-1].upos = s_i.upos
+    print(src_dict[int(s_i.head)])
+    if s_i.head != str(0):
+        try:
+            tgt_sent[dummy_pos-1].head = str(src_dict[int(s_i.head)][0])
+        except IndexError:
+            return
+    else:
+        tgt_sent[dummy_pos-1].head = str(0)
+
+
+    tgt_sent[dummy_pos-1].deprel = s_i.deprel
+    for pos in t_x[1:]:
+        tgt_sent[pos-1].head = str(dummy_pos)
+        tgt_sent[pos-1].deprel = 'dummy'
+        tgt_sent[pos-1].upos = 'dummy'
+
+
+
+    
+
+def add_dummy(s_j, src_dict, tgt_sent_len):
+    dummy = copy(s_j)
+    dummy.id = str(tgt_sent_len+1)
+    dummy._form = 'DUMMY'
+    dummy._lemma = 'DUMMY'
+    dummy.deprel = s_j.deprel
+    dummy.upos = s_j.upos
+    src_dict[int(s_j.id)].append(int(dummy.id))
+    if s_j.head != str(0):
+        try:
+            dummy.head = str(src_dict[int(s_j.id)][0])
+        except IndexError:
+            raise Exception('You done fucked up, son, again')
+    else:
+        dummy.head = str(0)
+    return dummy    
 
 def save_to_file(filename, sent):
     with codecs.open(filename, 'a', "utf-8") as f:
+        words_to_keep = []
         sent_by_line = sent.conll().split('\n')
+        previous_index = 0
+        counter = iter(range(1, len(sent_by_line)+1))
         # go through each word
         for word in sent_by_line:
             # split word at tab
             tab_list = word.split("\t")
             # check that the word has no features/dependencies
-            print(tab_list)
             if tab_list.count('_') >= 6:
+                continue
+            words_to_keep.append(tab_list)
+        for word in words_to_keep:
+            if not word[0].startswith('#'):
+                word[0] = str(next(counter))
+        f.write('\n'.join(['\t'.join(word) for word in words_to_keep]) + '\n\n')
+
+
                 # list index
-                index = sent_by_line.index(word)
-                # word index
-                word_index = tab_list[0]
-                renum_list = [i.split('\t') for i in sent_by_line[index+1:]]
-                for line in renum_list:
-                    print(line, 'line')
-                    line[0] = str(int(line[0])-1)
-                    if int(line[6]) > int(word_index):
-                        line[6] = str(int(line[6])-1)
-                sent_by_line = sent_by_line[:index] + ['\t'.join(i) for i in renum_list]
-        f.write('\n'.join(sent_by_line) + '\n\n')
+                # index = sent_by_line.index(word)
+                # print("index", index, tab_list)
+                # # word index
+                # word_index = tab_list[0]
+                # renum_list = [i.split('\t') for i in sent_by_line[index+1:]]
+                # for line in renum_list:
+                #     line[0] = str(int(line[0])-1)
+                #     if line[6] != '_' and int(line[6]) > int(word_index):
+                #         line[6] = str(int(line[6])-1)
+                # sent_by_line = sent_by_line[:index] + ['\t'.join(i) for i in renum_list]
 
 
 
 
-sent = project_annotations('./treebanks/new_uk_treebank.conllu', './treebanks/tokenized_be.conllu', './raw_data/uk_to_be.txt')
+#sent = project_annotations('./treebanks/new_uk_treebank.conllu', './treebanks/tokenized_be.conllu', './raw_data/uk_to_be.txt')
 #sent = project_annotations('./test_sent/uk.conllu', './test_sent/be.conllu', './test_sent/alg.txt')
+sent = project_annotations('./one_to_many/one_to_many_uk.conllu', './one_to_many/one_to_many_be.conllu', './one_to_many/one_to_many_algs.txt')
 
 
 
