@@ -5,7 +5,8 @@ import codecs
 from functools import wraps
 from copy import copy
 
-def project_annotations(path_to_src, path_to_tgt, alignment_file):
+# specify paths to source treebank, target treebank, and alignment file
+def project_annotations(path_to_src, path_to_tgt, alignment_file, save_file = 'proj_treebank.conllu'):
     # load from treebanks
     src = pyconll.load_from_file(path_to_src)
     tgt = pyconll.load_from_file(path_to_tgt)
@@ -16,7 +17,6 @@ def project_annotations(path_to_src, path_to_tgt, alignment_file):
     for sent in range(len(src)):
         save = True
         src_sent = src[sent]
-        print(src_sent.id)
         tgt_sent = tgt[sent]
         alg_sent = next(algs).split()
         src_to_tgt_dict = collections.defaultdict(list)
@@ -29,67 +29,135 @@ def project_annotations(path_to_src, path_to_tgt, alignment_file):
             # append the alignment dictionaries
             src_to_tgt_dict[src_tok].append(tgt_tok)
             tgt_to_src_dict[tgt_tok].append(src_tok)
+        # make sure the sentence is properly aligned
         if max(src_to_tgt_dict.keys()) > len(src_sent) or max(tgt_to_src_dict.keys()) > len(tgt_sent):
             print('Alignment in sentence {} is incorrect'.format(sent+1))
             continue
+
         # iterate through the source sentence
         for s_i in src_sent:
-            s_i_id = int(s_i.id)
+            if '-' not in s_i.id:
+                s_i_id = int(s_i.id)
+            else:
+                continue
             # check that token id is in the source dictionary (whether source -> target alignment exists)
             if s_i_id in src_to_tgt_dict.keys():
                 t_x = src_to_tgt_dict[s_i_id]
                 if len(t_x) == 1:
                     t_x_id = t_x[0]
                     if len(tgt_to_src_dict[t_x_id]) == 1:
-                        # one to one
+                        # one to one alignment
                         one_to_one(s_i, tgt_sent[t_x_id - 1], src_to_tgt_dict, src_sent, tgt_sent)
-                    else:
-                        # many to one
+                    elif len(tgt_to_src_dict[t_x_id]) == 0:
                         continue
+                    else:
+                        # many to one alignment (not implemented)
+                        print('Many to one alignment in sentence {}, word id {}. Not implemented'.format(sent+1, s_i.id))
+                        save = False
+                        break
+
                 else:
                     for pos in t_x:
                         if len(tgt_to_src_dict[pos]) > 1:
-                            # many to many
-                            print('many to many')
-                            continue
-                    # one to many
-                    print('one to many')
-                    one_to_one(s_i, tgt_sent[t_x[0]-1], src_to_tgt_dict, src_sent, tgt_sent) 
+                            # many to many projection (not implemented)
+                            print('Many to many alignment in sentence {}, word id {}. Not implemented'.format(sent+1, s_i.id))
+                            save = False
+                            break
+                    # perform one to many alignment
+                    one_to_many(s_i, t_x, src_to_tgt_dict, src_sent, tgt_sent)
+
             # if not in the source dictionary, the word is unaligned 
             else:
                 # check the word for any outgoing relations
+                # if none exist, it can be ignored
                 if s_i.id not in [word.head for word in src_sent]:
-                    print('There is an unaligned word but we can ignore it in sentence {}'.format(sent+1))
                     continue
                 else:
-                    print('There exists an unaligned word with an outgoing relation in sentence {}, word id {}'.format(sent+1, s_i.id))
-                    print('Not implemented')
+                    print('There exists an unaligned word with an outgoing relation in sentence {}, word id {}. Not implemented'.format(sent+1, s_i.id))
                     save = False
                     break
         if save == True:
-            save_to_file('trial.conllu', tgt_sent)
+            save_to_file(save_file, tgt_sent)
         
-
-    ## NB we can just save the modified treebank once everything is projected ##
-
 ### SUPPORT FUNCTIONS ###
+
+def one_to_one(s_i, t_x, src_dict, src_sent, tgt_sent):
+    # project upos tags 
+    t_x.upos = s_i.upos
+    # project dependencies
+    t_x.deprel = s_i.deprel
+    # project heads
+    s_j = s_i.head
+    # If token's head is not the root
+    if s_j != str(0):
+        try:
+            t_x.head = str(src_dict[int(s_j)][0])
+        # unaligned source head found
+        # add dummy node
+        except IndexError:
+            dummy = add_dummy(src_sent[s_j], src_dict, len(tgt_sent))
+            tgt_sent._tokens.append(dummy)
+            t_x.head = dummy.id
+    else:
+        t_x.head = str(0)
+
+def one_to_many(s_i, t_x, src_dict, src_sent, tgt_sent):
+    dummy_pos = t_x[0]
+    src_dict[int(s_i.id)] = [dummy_pos]
+    tgt_sent[dummy_pos-1].upos = s_i.upos
+    if s_i.head != str(0):
+        try:
+            tgt_sent[dummy_pos-1].head = str(src_dict[int(s_i.head)][0])
+        except IndexError:
+            tgt_sent[dummy_pos-1].head = str(0)
+    tgt_sent[dummy_pos-1].deprel = s_i.deprel
+    for pos in t_x[1:]:
+        tgt_sent[pos-1].head = str(dummy_pos)
+        tgt_sent[pos-1].deprel = 'dummy'
+        tgt_sent[pos-1].upos = 'dummy'
 
 def add_dummy(s_j, src_dict, tgt_sent_len):
     dummy = copy(s_j)
     dummy.id = str(tgt_sent_len+1)
     dummy._form = 'DUMMY'
-    dummy._lemma = 'DUMMY'
+    dummy.lemma = '_'
     dummy.deprel = s_j.deprel
     dummy.upos = s_j.upos
+    dummy.feats = {}
     src_dict[int(s_j.id)].append(int(dummy.id))
     if s_j.head != str(0):
         try:
-            dummy.head = str(src_dict[int(s_j.id)][0])
+            dummy.head = str(src_dict[int(s_j.head)][0])
         except IndexError:
-            raise Exception('You done fucked up, son, again')
-    else:
-        dummy.head = str(0)
+            dummy.head = str(0)
     return dummy    
+
+def save_to_file(filename, sent):
+    with codecs.open(filename, 'a', "utf-8") as f:
+        words_to_keep = []
+        shifts = []
+        sent_by_line = sent.conll().split('\n')
+        counter = iter(range(1, len(sent_by_line)+1))
+        # go through each word
+        for word in sent_by_line:
+            # split word at tab
+            tab_list = word.split("\t")
+            # check that the word has no features/dependencies
+            if tab_list.count('_') >= 6:
+                shifts.append(tab_list[0])
+                continue
+            else:
+                words_to_keep.append(tab_list)
+
+        # fix word and head ids
+        for word in words_to_keep:
+            if not word[0].startswith('#'):
+                word[0] = str(next(counter))
+                tgt_head = int(word[6])
+                for shift in shifts:
+                    if tgt_head >= int(shift):
+                        word[6] = str(int(word[6]) - 1)
+        f.write('\n'.join(['\t'.join(word) for word in words_to_keep]) + '\n\n')
 
 def swap_tgt_src(alg_file, output_file):
     with open(alg_file, 'r') as alg:
@@ -104,56 +172,10 @@ def alg_generator(alignment_file):
     with open(alignment_file) as alg:
         for line in alg:
             yield line.rstrip('\n')
-
-def one_to_one(s_i, t_x, src_dict, src_sent, tgt_sent):
-    # project upos tags 
-    t_x.upos = s_i.upos
-    # project dependencies
-    t_x.deprel = s_i.deprel
-    # project heads
-    s_j = s_i.head
-    if s_j != str(0):
-        try:
-            t_x.head = str(src_dict[int(s_j)][0])
-        # add dummy node
-        except IndexError:
-            dummy = add_dummy(src_sent[s_j], src_dict, len(tgt_sent))
-            tgt_sent._tokens.append(dummy)
-            t_x.head = dummy.id
-    else:
-        t_x.head = str(0)
-
-def one_to_many():
-    pass
-
-def save_to_file(filename, sent):
-    with codecs.open(filename, 'a', "utf-8") as f:
-        sent_by_line = sent.conll().split('\n')
-        # go through each word
-        for word in sent_by_line:
-            # split word at tab
-            tab_list = word.split("\t")
-            # check that the word has no features/dependencies
-            print(tab_list)
-            if tab_list.count('_') >= 6:
-                # list index
-                index = sent_by_line.index(word)
-                # word index
-                word_index = tab_list[0]
-                renum_list = [i.split('\t') for i in sent_by_line[index+1:]]
-                for line in renum_list:
-                    print(line, 'line')
-                    line[0] = str(int(line[0])-1)
-                    if int(line[6]) > int(word_index):
-                        line[6] = str(int(line[6])-1)
-                sent_by_line = sent_by_line[:index] + ['\t'.join(i) for i in renum_list]
-        f.write('\n'.join(sent_by_line) + '\n\n')
-
-
-
-
-sent = project_annotations('./treebanks/new_uk_treebank.conllu', './treebanks/tokenized_be.conllu', './raw_data/uk_to_be.txt')
+ 
+#sent = project_annotations('./treebanks/new_uk_treebank.conllu', './treebanks/tokenized_be.conllu', './raw_data/uk_to_be.txt')
 #sent = project_annotations('./test_sent/uk.conllu', './test_sent/be.conllu', './test_sent/alg.txt')
+#sent = project_annotations('./one_to_many/one_to_many_uk.conllu', './one_to_many/one_to_many_be.conllu', './one_to_many/one_to_many_algs.txt')
 
 
 
