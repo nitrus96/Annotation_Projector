@@ -5,6 +5,20 @@ import codecs
 from functools import wraps
 from copy import copy
 
+def clean_token_ids(conllu, newfile):
+    # load from treebanks
+    conllu_file = pyconll.load_from_file(conllu)
+    with codecs.open(newfile, 'a', "utf-8") as f:
+        for sent in conllu_file:
+            sent_str = sent.conll().split('\n')
+            for token_line in sent_str:
+                token_list = token_line.split('\t')
+                
+                # if line is a comment or token has a single number id, write
+                if token_list[0].startswith('#') or ('-' not in token_list[0]):
+                    f.write('\t'.join(token_list)+'\n')
+            f.write('\n')
+
 # specify paths to source treebank, target treebank, and alignment file
 def project_annotations(path_to_src, path_to_tgt, alignment_file, save_file = 'proj_treebank.conllu'):
     # load from treebanks
@@ -173,9 +187,12 @@ def alg_generator(alignment_file):
         for line in alg:
             yield line.rstrip('\n')
  
+ 
+#clean_token_ids("/home/shorouq/Desktop/rnd/fusha_ammani/data/MSA.conllu", "src_clean.conllu")
+#clean_token_ids("/home/shorouq/Desktop/rnd/fusha_ammani/data/Amman.conllu", "tgt_clean.conllu")
 #sent = project_annotations('./treebanks/new_uk_treebank.conllu', './treebanks/tokenized_be.conllu', './raw_data/uk_to_be.txt')
 #sent = project_annotations('./test_sent/uk.conllu', './test_sent/be.conllu', './test_sent/alg.txt')
 #sent = project_annotations('./one_to_many/one_to_many_uk.conllu', './one_to_many/one_to_many_be.conllu', './one_to_many/one_to_many_algs.txt')
-
+sent = project_annotations('/home/shorouq/Desktop/rnd/fusha_ammani/data/src_clean.conllu','/home/shorouq/Desktop/rnd/fusha_ammani/data/tgt_clean.conllu', '/home/shorouq/Desktop/rnd/fusha_ammani/data/reverse.align.MSA.Amman.txt')
 
 
