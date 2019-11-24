@@ -4,6 +4,7 @@ import collections
 import codecs
 from functools import wraps
 from copy import copy
+import re
 
 def clean_token_ids(conllu, newfile):
     # load from treebanks
@@ -45,6 +46,9 @@ def project_annotations(path_to_src, path_to_tgt, alignment_file, save_file = 'p
             tgt_to_src_dict[tgt_tok].append(src_tok)
         # make sure the sentence is properly aligned
         if max(src_to_tgt_dict.keys()) > len(src_sent) or max(tgt_to_src_dict.keys()) > len(tgt_sent):
+            #print(max(src_to_tgt_dict), len(src_sent))
+            #print("source to target:", src_to_tgt_dict)
+            #print(max(tgt_to_src_dict), len(tgt_sent))
             print('Alignment in sentence {} is incorrect'.format(sent+1))
             continue
 
@@ -65,7 +69,12 @@ def project_annotations(path_to_src, path_to_tgt, alignment_file, save_file = 'p
                     elif len(tgt_to_src_dict[t_x_id]) == 0:
                         continue
                     else:
+
                         # many to one alignment (not implemented)
+                        # To-do: delete all alignments between source words and the target
+                        # leave only the alignment between the head of source words and the target token
+                        #print(src_to_tgt_dict[s_i_id])
+                        #print(tgt_to_src_dict[s_i_id])
                         print('Many to one alignment in sentence {}, word id {}. Not implemented'.format(sent+1, s_i.id))
                         save = False
                         break
@@ -78,6 +87,7 @@ def project_annotations(path_to_src, path_to_tgt, alignment_file, save_file = 'p
                             save = False
                             break
                     # perform one to many alignment
+                    #print("one to many for", s_i.form)
                     one_to_many(s_i, t_x, src_to_tgt_dict, src_sent, tgt_sent)
 
             # if not in the source dictionary, the word is unaligned 
@@ -109,6 +119,7 @@ def one_to_one(s_i, t_x, src_dict, src_sent, tgt_sent):
         # unaligned source head found
         # add dummy node
         except IndexError:
+            print("unaligned source head found during 1:1")
             dummy = add_dummy(src_sent[s_j], src_dict, len(tgt_sent))
             tgt_sent._tokens.append(dummy)
             t_x.head = dummy.id
@@ -116,19 +127,26 @@ def one_to_one(s_i, t_x, src_dict, src_sent, tgt_sent):
         t_x.head = str(0)
 
 def one_to_many(s_i, t_x, src_dict, src_sent, tgt_sent):
-    dummy_pos = t_x[0]
-    src_dict[int(s_i.id)] = [dummy_pos]
-    tgt_sent[dummy_pos-1].upos = s_i.upos
-    if s_i.head != str(0):
-        try:
-            tgt_sent[dummy_pos-1].head = str(src_dict[int(s_i.head)][0])
-        except IndexError:
-            tgt_sent[dummy_pos-1].head = str(0)
-    tgt_sent[dummy_pos-1].deprel = s_i.deprel
-    for pos in t_x[1:]:
-        tgt_sent[pos-1].head = str(dummy_pos)
-        tgt_sent[pos-1].deprel = 'dummy'
-        tgt_sent[pos-1].upos = 'dummy'
+
+    #print("T_X IS:", t_x)
+    #print(src_sent.text)
+    #print("source word:", s_i.form)
+    try:
+        dummy_pos = t_x[0]
+        src_dict[int(s_i.id)] = [dummy_pos]
+        tgt_sent[dummy_pos-1].upos = s_i.upos
+        if s_i.head != str(0):
+            try:
+                tgt_sent[dummy_pos-1].head = str(src_dict[int(s_i.head)][0])
+            except IndexError:
+                tgt_sent[dummy_pos-1].head = str(0)
+        tgt_sent[dummy_pos-1].deprel = s_i.deprel
+        for pos in t_x[1:]:
+            tgt_sent[pos-1].head = str(dummy_pos)
+            tgt_sent[pos-1].deprel = 'dummy'
+            tgt_sent[pos-1].upos = 'dummy'
+    except IndexError:
+        print("problem with t_x being an empty list")
 
 def add_dummy(s_j, src_dict, tgt_sent_len):
     dummy = copy(s_j)
@@ -167,7 +185,10 @@ def save_to_file(filename, sent):
         for word in words_to_keep:
             if not word[0].startswith('#'):
                 word[0] = str(next(counter))
-                tgt_head = int(word[6])
+                #print(word)
+                #print(word[6])
+                if re.match(r"[0-9]", word[6]):
+                    tgt_head = int(word[6])
                 for shift in shifts:
                     if tgt_head >= int(shift):
                         word[6] = str(int(word[6]) - 1)
@@ -193,6 +214,9 @@ def alg_generator(alignment_file):
 #sent = project_annotations('./treebanks/new_uk_treebank.conllu', './treebanks/tokenized_be.conllu', './raw_data/uk_to_be.txt')
 #sent = project_annotations('./test_sent/uk.conllu', './test_sent/be.conllu', './test_sent/alg.txt')
 #sent = project_annotations('./one_to_many/one_to_many_uk.conllu', './one_to_many/one_to_many_be.conllu', './one_to_many/one_to_many_algs.txt')
-sent = project_annotations('/home/shorouq/Desktop/rnd/fusha_ammani/data/src_clean.conllu','/home/shorouq/Desktop/rnd/fusha_ammani/data/tgt_clean.conllu', '/home/shorouq/Desktop/rnd/fusha_ammani/data/reverse.align.MSA.Amman.txt')
-
-
+#sent = project_annotations('/home/shorouq/Desktop/rnd/fusha_ammani/data/src_clean.conllu',
+#'/home/shorouq/Desktop/rnd/fusha_ammani/data/tgt_clean.conllu', 
+#'/home/shorouq/Desktop/rnd/fusha_ammani/data/src_tgt_forward.align')
+sent = project_annotations("/home/shorouq/Desktop/rnd/fusha_ammani/data/georgie/src_parsed_500.conllu",
+"/home/shorouq/Desktop/rnd/fusha_ammani/data/georgie/tgt_not_parsed_500.conllu", 
+"/home/shorouq/Desktop/rnd/fusha_ammani/data/georgie/alignments500.txt") 
