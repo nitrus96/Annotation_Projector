@@ -195,20 +195,3 @@ def clean_token_ids(conllu, newfile):
                 if token_list[0].startswith('#') or ('-' not in token_list[0]):
                     f.write('\t'.join(token_list)+'\n')
             f.write('\n')
- 
-#sent = project_annotations('./treebanks/new_uk_treebank.conllu', './treebanks/tokenized_be.conllu', './raw_data/uk_to_be.txt')
-#sent = project_annotations('./test_sent/uk.conllu', './test_sent/be.conllu', './test_sent/alg.txt')
-#sent = project_annotations('./one_to_many/one_to_many_uk.conllu', './one_to_many/one_to_many_be.conllu', './one_to_many/one_to_many_algs.txt')
-
- 
-#clean_token_ids("/home/shorouq/Desktop/rnd/fusha_ammani/data/MSA.conllu", "src_clean.conllu")
-#clean_token_ids("/home/shorouq/Desktop/rnd/fusha_ammani/data/Amman.conllu", "tgt_clean.conllu")
-#sent = project_annotations('/home/shorouq/Desktop/rnd/fusha_ammani/data/ivan/new_uk_treebank.conllu', '/home/shorouq/Desktop/rnd/fusha_ammani/data/ivan/tokenized_be.conllu', '/home/shorouq/Desktop/rnd/fusha_ammani/data/ivan/uk_to_be.txt')
-#sent = project_annotations('./test_sent/uk.conllu', './test_sent/be.conllu', './test_sent/alg.txt')
-#sent = project_annotations('./one_to_many/one_to_many_uk.conllu', './one_to_many/one_to_many_be.conllu', './one_to_many/one_to_many_algs.txt')
-sent = project_annotations('/home/shorouq/Desktop/rnd/fusha_ammani/data/src_clean.conllu',
-'/home/shorouq/Desktop/rnd/fusha_ammani/data/tgt_clean.conllu', 
-'/home/shorouq/Desktop/rnd/fusha_ammani/data/src_tgt_forward.align')
-#sent = project_annotations("/home/shorouq/Desktop/rnd/fusha_ammani/data/georgie/src_parsed_500.conllu",
-#"/home/shorouq/Desktop/rnd/fusha_ammani/data/georgie/tgt_not_parsed_500.conllu", 
-#"/home/shorouq/Desktop/rnd/fusha_ammani/data/georgie/alignments500.txt") 
