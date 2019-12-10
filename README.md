@@ -1,12 +1,10 @@
 # Annotation_Projector
 
-**Pyconll** for loading/processing treebanks
-https://pyconll.github.io/
+A tool to facilitate transfer of morphosyntactic information between Universal Dependencies treebanks.
 
-Load a treebank:  treebank = pyconll.load_from_file(path_to_treebank)
+The main function `project_annotations` accepts the following arguments:
+* `path_to_src`, `path_to_tgt`: paths to source and target treebanks (must be in conllu format)
+* `alignment_file`: path to the alignment file (in the 'Pharaoh' format like 0-0 1-1 2-3 3-2, with indexing starting at 0 and sentence boundaries demarkated by a new line)
 
-Individual sentences can be retrieved through indexing and/or iteration: first_sentence = treebank[0] / sentences = [sentence for sentence in treebank]
+Helper functions `swap_tgt_src` and `clean_token_ids` swap the alignment direction and clean up multiword token ids respectively. 
 
-Same with tokens: first_token = first_sentence[0] / tokens = [token for token in sentence]
-
-Tokens has a number of accessible attributes, *.id* for token id, *.form* for the word itself, *.head*, *.upos*, *.deprel* for the dependency relationship 
