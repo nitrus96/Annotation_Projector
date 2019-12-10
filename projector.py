@@ -2,7 +2,6 @@ import re
 import pyconll
 import collections
 import codecs
-from functools import wraps
 from copy import copy
 
 # specify paths to source treebank, target treebank, and alignment file
